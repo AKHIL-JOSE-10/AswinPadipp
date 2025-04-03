@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    canvas {
+      height: 300px;
+      width: 100%;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <canvas id="waterQualityChart"></canvas>
+  </div>
+  <button onclick="downloadReport()">Download Report</button>
+
+  <script>
+    const ctx = document.getElementById('waterQualityChart').getContext('2d');
+
+    const data = {
+      labels: [],
+      datasets: [
+        {
+          label: 'Turbidity (NTU)',
+          data: [],
+          borderColor: 'rgb(255, 99, 132)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          fill: false,
+          tension: 0.1
+        },
+        {
+          label: 'TDS (ppm)',
+          data: [],
+          borderColor: 'rgb(54, 162, 235)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          fill: false,
+          tension: 0.1
+        }
+      ]
+    };
+
+    const config = {
+      type: 'line',
+      data: data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom'
+          },
+          y: {
+            suggestedMin: 0,
+            suggestedMax: 100
+          }
+        }
+      }
+    };
+
+    const chart = new Chart(ctx, config);
+
+    let time = 0;
+    function fetchWaterQuality() {
+      fetch('/data')
+        .then(response => response.json())
+        .then(json => {
+          const turbidity = json.turbidity;
+          const tds = json.tds;
+          const pureWaterTurbidity = 0.5; // Assumed pure water turbidity
+          const pureWaterTDS = 50; // Assumed pure water TDS
+
+          if (data.labels.length >= 50) {
+            data.labels.shift();
+            data.datasets[0].data.shift();
+            data.datasets[1].data.shift();
+          }
+
+          data.labels.push(time++);
+          data.datasets[0].data.push(turbidity);
+          data.datasets[1].data.push(tds);
+
+          chart.update();
+        })
+        .catch(err => console.error('Error fetching water quality data:', err));
+    }
+
+    function downloadReport() {
+      const latestTurbidity = data.datasets[0].data[data.datasets[0].data.length - 1] || 0;
+      const latestTDS = data.datasets[1].data[data.datasets[1].data.length - 1] || 0;
+      const pureWaterTurbidity = 0.5;
+      const pureWaterTDS = 50;
+      
+      const turbidityDiff = latestTurbidity - pureWaterTurbidity;
+      const tdsDiff = latestTDS - pureWaterTDS;
+
+      const reportContent = `Water Quality Report\n\n` +
+                            `Latest Turbidity: ${latestTurbidity} NTU\n` +
+                            `Difference from Pure Water Turbidity: ${turbidityDiff.toFixed(2)} NTU\n\n` +
+                            `Latest TDS: ${latestTDS} ppm\n` +
+                            `Difference from Pure Water TDS: ${tdsDiff.toFixed(2)} ppm\n`;
+      
+      const blob = new Blob([reportContent], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Water_Quality_Report.txt';
+      link.click();
+    }
+
+    // Poll the server every second
+    setInterval(fetchWaterQuality, 1000);
+  </script>
+</body>
+</html>
